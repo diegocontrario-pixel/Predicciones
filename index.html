@@ -250,7 +250,7 @@
   </div>
   <div id="app"></div>
   <div class="sync-note">Los resultados se guardan y se comparten con todos los que abran este link.</div>
-  <div class="sync-note" style="opacity:0.5; margin-top:4px;">Versión: 2026-08-29-r2</div>
+  <div class="sync-note" style="opacity:0.5; margin-top:4px;">Versión: 2026-09-11-r3</div>
 </div>
 
 <script>
@@ -280,6 +280,19 @@ const dbStorage = {
     if(!firebaseReady) throw new Error('Firebase no disponible');
     await firebase.database().ref(key).set(value);
     return { key, value };
+  },
+  // lectura-modificación-escritura atómica: evita que dos dispositivos se pisen
+  async transaction(key, updateFn){
+    if(!firebaseReady) throw new Error('Firebase no disponible');
+    const res = await firebase.database().ref(key).transaction(cur => updateFn(cur));
+    if(res && res.snapshot) return res.snapshot.val();
+    return null;
+  },
+  onValue(key, cb){
+    if(!firebaseReady) return ()=>{};
+    const ref = firebase.database().ref(key);
+    const handler = ref.on('value', snap => cb(snap.val()));
+    return ()=> ref.off('value', handler);
   }
 };
 
@@ -347,7 +360,47 @@ function healHistory(){
   return changed;
 }
 
+// Qué input está enfocado y dónde está el cursor, para poder devolverlo
+// después de repintar (una actualización remota no debe robarte el foco).
+function focusSnapshot(){
+  const el = document.activeElement;
+  if(!el || !el.classList) return null;
+  const esPred = el.classList.contains('pred-input');
+  const esRes = el.classList.contains('res-input');
+  if(!esPred && !esRes) return null;
+  let start = null, end = null;
+  try{ start = el.selectionStart; end = el.selectionEnd; }catch(e){}
+  return { sel: esPred ? '.pred-input' : '.res-input', idx: el.dataset.idx, start, end };
+}
+
+function restoreFocus(snap){
+  if(!snap) return;
+  const el = document.querySelector(`${snap.sel}[data-idx="${snap.idx}"]`);
+  if(!el) return;
+  el.focus();
+  // los input[type=number] no aceptan setSelectionRange en todos los navegadores
+  if(snap.start !== null){ try{ el.setSelectionRange(snap.start, snap.end); }catch(e){} }
+}
+
+// El riel de rondas se hace más largo que la pantalla; centramos la ronda actual.
+function scrollTrackToCurrent(){
+  const track = document.querySelector('.track');
+  if(!track) return;
+  const cur = track.querySelector('.chip.current');
+  if(!cur) return;
+  const delta = (cur.getBoundingClientRect().left - track.getBoundingClientRect().left)
+              - (track.clientWidth - cur.offsetWidth) / 2;
+  track.scrollLeft += delta;
+}
+
 function render(){
+  const snap = focusSnapshot();
+  renderInner();
+  restoreFocus(snap);
+  scrollTrackToCurrent();
+}
+
+function renderInner(){
   const app = document.getElementById('app');
   const topReset = document.getElementById('topReset');
   if(topReset) topReset.style.display = (state.phase === 'setup' || showLeaderboard) ? 'none' : 'inline-block';
@@ -406,10 +459,19 @@ function avatarHtml(name, size, inline){
 }
 
 
-function renderSetup(){
-  const n = localDraft.numPlayers || 4;
+// Deja los borradores del setup con exactamente n posiciones, para que al bajar
+// la cantidad de jugadores no queden nombres fantasma marcando "(ya elegido)".
+function trimDraft(n){
   if(!localDraft.names) localDraft.names = [];
   if(!localDraft.nameMode) localDraft.nameMode = [];
+  localDraft.names.length = n;
+  localDraft.nameMode.length = n;
+  if(!(localDraft.startDealer >= 0 && localDraft.startDealer < n)) localDraft.startDealer = 0;
+}
+
+function renderSetup(){
+  const n = localDraft.numPlayers || 4;
+  trimDraft(n);
   let nameInputs = '';
   for(let i=0;i<n;i++){
     const mode = localDraft.nameMode[i] || '';
@@ -429,10 +491,14 @@ function renderSetup(){
       </div>`;
   }
   let dealerOpts = '';
+  const dealerSel = localDraft.startDealer || 0;
   for(let i=0;i<n;i++){
     const val = (localDraft.names && localDraft.names[i]) || `Jugador ${i+1}`;
-    dealerOpts += `<option value="${i}">${escapeHtml(val)}</option>`;
+    dealerOpts += `<option value="${i}" ${i===dealerSel ? 'selected':''}>${escapeHtml(val)}</option>`;
   }
+  const errorNote = localDraft.error
+    ? `<div class="forbidden-note" style="margin-top:12px; text-align:left;">${escapeHtml(localDraft.error)}</div>`
+    : '';
   return `
   <div class="card">
     <h2 style="margin-bottom:14px;">Nueva partida</h2>
@@ -453,6 +519,7 @@ function renderSetup(){
       <input type="number" id="monto" min="0" step="1" placeholder="Ej: 2000" value="${localDraft.monto || ''}">
       <div style="font-size:12px;color:var(--muted); margin-top:4px;">Quien quede QUESO (42+ puntos abajo del ganador) paga el doble.</div>
     </div>
+    ${errorNote}
     <div class="footer-actions">
       <button class="btn-ghost" id="viewLeaderboardSetup">Ver historial de partidas</button>
       <button class="btn-primary" id="startGame">Empezar partida</button>
@@ -491,10 +558,16 @@ function playIntroAnimation(names, onComplete){
 
 function attachSetupHandlers(){
   const vls = document.getElementById('viewLeaderboardSetup');
-  if(vls) vls.addEventListener('click', ()=>{ showLeaderboard = true; render(); });
+  if(vls) vls.addEventListener('click', async ()=>{
+    await loadLeaderboard();
+    showLeaderboard = true;
+    render();
+  });
   const numSel = document.getElementById('numPlayers');
   numSel.addEventListener('change', e=>{
     localDraft.numPlayers = Number(e.target.value);
+    localDraft.error = null;
+    trimDraft(localDraft.numPlayers); // descarta nombres sobrantes y acota el repartidor
     render();
   });
   document.querySelectorAll('.name-select').forEach(sel=>{
@@ -507,6 +580,7 @@ function attachSetupHandlers(){
         localDraft.nameMode[idx] = 'preset';
         localDraft.names[idx] = e.target.value;
       }
+      localDraft.error = null;
       render();
     });
   });
@@ -514,6 +588,7 @@ function attachSetupHandlers(){
     inp.addEventListener('input', e=>{
       const idx = Number(e.target.dataset.idx);
       localDraft.names[idx] = e.target.value;
+      localDraft.error = null;
     });
   });
   const dealerSel = document.getElementById('startDealer');
@@ -528,10 +603,19 @@ function attachSetupHandlers(){
       const v = (localDraft.names && localDraft.names[i] || '').trim();
       names.push(v || `Jugador ${i+1}`);
     }
+    // el historial cruza jugadores por nombre: dos iguales se fusionarían en una sola fila
+    const repetidos = names.filter((nm,i)=> names.indexOf(nm) !== i);
+    if(repetidos.length){
+      localDraft.error = `Hay nombres repetidos (${[...new Set(repetidos)].join(', ')}). Cada jugador necesita un nombre distinto.`;
+      render();
+      return;
+    }
+    localDraft.error = null;
+    const dealer = (localDraft.startDealer >= 0 && localDraft.startDealer < n) ? localDraft.startDealer : 0;
     state = {
       phase:'predict',
       players: names,
-      startDealer: localDraft.startDealer || 0,
+      startDealer: dealer,
       monto: Number(localDraft.monto) || 0,
       rounds: buildRounds(n),
       roundIdx: 0,
@@ -628,8 +712,8 @@ function renderGame(){
   });
 
   const resultSum = state.players.reduce((acc,_,i)=> acc + (state.resultados[i] !== undefined && state.resultados[i] !== '' ? Number(state.resultados[i]) : 0), 0);
-  const allResultsFilled = state.players.every((_,i)=> state.resultados[i] !== undefined && state.resultados[i] !== '');
-  const allPredsFilled = state.players.every((_,i)=> preds[i] !== undefined && preds[i] !== '');
+  const allResultsFilled = state.players.every((_,i)=> enRango(state.resultados[i], round.manos));
+  const allPredsFilled = state.players.every((_,i)=> enRango(preds[i], round.manos));
   const lastPredIsForbidden = forbidden !== null && preds[lastIdx] !== undefined && preds[lastIdx] !== '' && Number(preds[lastIdx]) === forbidden;
   const canConfirmPredict = allPredsFilled && !lastPredIsForbidden;
   const canConfirmResult = allResultsFilled && resultSum === round.manos;
@@ -797,6 +881,8 @@ function computeFinalStandings(){
 
 function renderFinished(){
   const { winner, standings } = computeFinalStandings();
+  const fecha = new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'});
+  const yaGuardada = leaderboard.some(g => g.id === gameFingerprint(fecha));
   let rows = standings.map(p=>`
     <div class="score-row">
       <div class="pos">${p.position}</div>
@@ -838,7 +924,7 @@ function renderFinished(){
     <div class="footer-actions">
       <button class="btn-ghost" id="viewLeaderboard">Ver historial de partidas</button>
       <div style="display:flex; gap:10px;">
-        <button class="btn-ghost" id="saveGameBtn">Guardar partida</button>
+        <button class="btn-ghost" id="saveGameBtn" ${yaGuardada ? 'disabled style="opacity:.6;cursor:default;"' : ''}>${yaGuardada ? 'Partida guardada ✓' : 'Guardar partida'}</button>
         <button class="btn-primary" id="resetGame">Nueva partida</button>
       </div>
     </div>
@@ -852,6 +938,26 @@ function setButtonEnabled(btn, enabled){
   btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
 }
 
+// El min/max de un input number no impide escribir 99 ni -4: lo acotamos a mano.
+function clampManos(inputEl){
+  const round = state.rounds[state.roundIdx];
+  const max = round ? round.manos : 0;
+  if(inputEl.value === '') return '';
+  let num = Math.floor(Number(inputEl.value));
+  if(!Number.isFinite(num)) num = 0;
+  num = Math.max(0, Math.min(max, num));
+  if(String(num) !== inputEl.value) inputEl.value = String(num);
+  return num;
+}
+
+// Red de seguridad por si llega un valor fuera de rango desde otro dispositivo
+// o desde un estado guardado viejo.
+function enRango(v, max){
+  if(v === undefined || v === null || v === '') return false;
+  const num = Number(v);
+  return Number.isInteger(num) && num >= 0 && num <= max;
+}
+
 function updatePredictUI(){
   const round = state.rounds[state.roundIdx];
   const dealerIdx = currentDealerIdx();
@@ -859,7 +965,7 @@ function updatePredictUI(){
   const forbidden = forbiddenForLast(round, state.predicciones, lastIdx);
   const noteEl = document.getElementById('forbiddenNote');
   if(noteEl) noteEl.textContent = forbidden !== null ? `No puede decir ${forbidden}` : '';
-  const allFilled = state.players.every((_,i)=> state.predicciones[i] !== undefined && state.predicciones[i] !== '');
+  const allFilled = state.players.every((_,i)=> enRango(state.predicciones[i], round.manos));
   const lastVal = state.predicciones[lastIdx];
   const lastIsForbidden = forbidden !== null && lastVal !== undefined && lastVal !== '' && Number(lastVal) === forbidden;
   const canConfirm = allFilled && !lastIsForbidden;
@@ -869,7 +975,7 @@ function updatePredictUI(){
 function updateResultUI(){
   const round = state.rounds[state.roundIdx];
   const resultSum = state.players.reduce((acc,_,i)=> acc + (state.resultados[i] !== undefined && state.resultados[i] !== '' ? Number(state.resultados[i]) : 0), 0);
-  const allFilled = state.players.every((_,i)=> state.resultados[i] !== undefined && state.resultados[i] !== '');
+  const allFilled = state.players.every((_,i)=> enRango(state.resultados[i], round.manos));
   const canConfirm = allFilled && resultSum === round.manos;
   const noteEl = document.getElementById('resultSumNote');
   if(noteEl) noteEl.textContent = (allFilled && !canConfirm) ? `La suma de manos ganadas debe ser ${round.manos} (va en ${resultSum})` : '';
@@ -934,17 +1040,21 @@ function attachGameHandlers(){
   document.querySelectorAll('.pred-input').forEach(inp=>{
     inp.addEventListener('input', e=>{
       const i = Number(e.target.dataset.idx);
-      state.predicciones[i] = e.target.value === '' ? '' : Number(e.target.value);
+      const v = clampManos(e.target);
+      state.predicciones[i] = v;
+      localEdits.predicciones[i] = v;
       updatePredictUI();
-      saveState(true);
+      saveField();
     });
   });
   document.querySelectorAll('.res-input').forEach(inp=>{
     inp.addEventListener('input', e=>{
       const i = Number(e.target.dataset.idx);
-      state.resultados[i] = e.target.value === '' ? '' : Number(e.target.value);
+      const v = clampManos(e.target);
+      state.resultados[i] = v;
+      localEdits.resultados[i] = v;
       updateResultUI();
-      saveState(true);
+      saveField();
     });
   });
   attachEnterAdvance('.pred-input', 'confirmPredict');
@@ -1005,14 +1115,17 @@ function attachCommonHandlers(){
   const rg = document.getElementById('resetGame');
   if(rg) rg.addEventListener('click', doReset);
   const vl = document.getElementById('viewLeaderboard');
-  if(vl) vl.addEventListener('click', ()=>{ showLeaderboard = true; render(); });
+  if(vl) vl.addEventListener('click', async ()=>{
+    await loadLeaderboard(); // puede haber partidas guardadas desde otro celular
+    showLeaderboard = true;
+    render();
+  });
   const sg = document.getElementById('saveGameBtn');
   if(sg) sg.addEventListener('click', async ()=>{
-    const entry = buildGameEntry();
-    leaderboard.unshift(entry);
-    await saveLeaderboard();
-    sg.textContent = 'Partida guardada ✓';
     sg.disabled = true;
+    sg.textContent = 'Guardando…';
+    await addGameToLeaderboard(buildGameEntry());
+    sg.textContent = 'Partida guardada ✓';
     sg.style.opacity = '.6';
     sg.style.cursor = 'default';
   });
@@ -1031,18 +1144,55 @@ let showLeaderboard = false;
 async function loadLeaderboard(){
   try{
     const res = await dbStorage.get(LEADERBOARD_KEY);
-    if(res && res.value) leaderboard = JSON.parse(res.value);
+    if(res && res.value) leaderboard = JSON.parse(res.value) || [];
   }catch(e){}
 }
-async function saveLeaderboard(){
-  try{ await dbStorage.set(LEADERBOARD_KEY, JSON.stringify(leaderboard)); }catch(e){}
+
+// Agregar y borrar leen lo último del servidor dentro de la misma operación
+// atómica. Antes se escribía el array completo desde memoria, así que una
+// pestaña abierta hace rato borraba las partidas guardadas por otro.
+async function addGameToLeaderboard(entry){
+  try{
+    const merged = await dbStorage.transaction(LEADERBOARD_KEY, cur => {
+      let lista = [];
+      if(cur){ try{ lista = JSON.parse(cur) || []; }catch(e){ lista = []; } }
+      if(lista.some(g => g.id === entry.id)) return cur; // ya la guardó otro celular
+      lista.unshift(entry);
+      return JSON.stringify(lista);
+    });
+    if(merged){ try{ leaderboard = JSON.parse(merged) || []; }catch(e){} }
+  }catch(e){}
+}
+
+async function removeGameFromLeaderboard(id){
+  try{
+    const merged = await dbStorage.transaction(LEADERBOARD_KEY, cur => {
+      let lista = [];
+      if(cur){ try{ lista = JSON.parse(cur) || []; }catch(e){ lista = []; } }
+      return JSON.stringify(lista.filter(g => g.id !== id));
+    });
+    if(merged){ try{ leaderboard = JSON.parse(merged) || []; }catch(e){} }
+  }catch(e){}
+}
+
+// Id derivado del contenido de la partida, no de la hora: si dos jugadores
+// tocan "Guardar partida" desde sus celulares, generan el mismo id y se
+// guarda una sola vez.
+function gameFingerprint(fecha){
+  const t = totals();
+  const raw = fecha + '#' + state.players.join('|') + '#'
+            + state.players.map((_,i)=> t[i]).join(',') + '#' + (state.history || []).length;
+  let h = 0;
+  for(let i=0;i<raw.length;i++){ h = (Math.imul(h, 31) + raw.charCodeAt(i)) | 0; }
+  return Math.abs(h);
 }
 
 function buildGameEntry(){
   const { winner, standings } = computeFinalStandings();
+  const date = new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'});
   return {
-    id: Date.now(),
-    date: new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'}),
+    id: gameFingerprint(date),
+    date,
     monto: state.monto || 0,
     winner: winner ? winner.name : '',
     standings
@@ -1151,8 +1301,7 @@ function attachLeaderboardHandlers(){
     btn.addEventListener('click', e=>{
       const id = Number(e.currentTarget.dataset.id);
       showConfirm('¿Eliminar esta partida del historial? Esto no se puede deshacer.', async ()=>{
-        leaderboard = leaderboard.filter(g=> g.id !== id);
-        await saveLeaderboard();
+        await removeGameFromLeaderboard(id);
         render();
       });
     });
@@ -1160,62 +1309,114 @@ function attachLeaderboardHandlers(){
 }
 
 const STORAGE_KEY = 'predicciones-game-v1';
-let saving = false;
 let suspendPoll = false; // true mientras se muestra la animación de inicio, para no pisar el estado nuevo
 
-async function saveState(silent){
-  if(!firebaseReady){
-    const tag = document.getElementById('syncTag');
-    if(tag) tag.textContent = 'guardado no disponible aquí';
-    return;
-  }
+function setSyncTag(txt){
+  const tag = document.getElementById('syncTag');
+  if(tag) tag.textContent = txt;
+}
+
+function parseRemote(raw){
+  if(!raw) return null;
+  try{ return typeof raw === 'string' ? JSON.parse(raw) : raw; }
+  catch(e){ return null; }
+}
+
+// ¿el estado remoto describe exactamente la misma ronda que estamos editando?
+// Si el remoto ya avanzó, nuestras ediciones locales quedaron obsoletas.
+function sameRound(remote){
+  if(!remote || remote.phase !== state.phase) return false;
+  if(remote.roundIdx !== state.roundIdx) return false;
+  if(!Array.isArray(remote.players) || remote.players.length !== state.players.length) return false;
+  return (remote.history || []).length === (state.history || []).length;
+}
+
+// Campos que este dispositivo tocó en la ronda actual. Son los únicos que
+// pisamos encima de lo remoto; el resto lo respetamos tal cual llega.
+let localEdits = { predicciones: {}, resultados: {} };
+function clearLocalEdits(){ localEdits = { predicciones: {}, resultados: {} }; }
+
+function overlayLocalEdits(base){
+  ['predicciones','resultados'].forEach(campo=>{
+    Object.keys(localEdits[campo]).forEach(i=>{
+      if(!base[campo]) base[campo] = {};
+      base[campo][i] = localEdits[campo][i];
+    });
+  });
+  return base;
+}
+
+// Guardado de una tecla: fusiona contra lo último que haya en el servidor en
+// vez de escribir el estado completo. Así dos jugadores pueden escribir a la vez.
+async function saveField(){
+  if(!firebaseReady){ setSyncTag('guardado no disponible aquí'); return; }
   try{
-    saving = true;
-    const res = await dbStorage.set(STORAGE_KEY, JSON.stringify(state));
-    document.getElementById('syncTag') && (document.getElementById('syncTag').textContent = res ? 'sincronizado ✓' : 'error al guardar');
+    const merged = await dbStorage.transaction(STORAGE_KEY, cur => {
+      const remote = parseRemote(cur);
+      if(!remote) return JSON.stringify(state);
+      if(!sameRound(remote)) return cur; // el remoto va más adelante: no lo tocamos
+      return JSON.stringify(overlayLocalEdits(remote));
+    });
+    const remote = parseRemote(merged);
+    if(remote && !sameRound(remote)){
+      // el remoto avanzó mientras escribíamos: descartamos lo nuestro y lo adoptamos
+      clearLocalEdits();
+      state = remote;
+      render();
+    } else if(remote){
+      state = overlayLocalEdits(remote);
+    }
+    setSyncTag('sincronizado ✓');
   }catch(e){
-    const tag = document.getElementById('syncTag');
-    if(tag) tag.textContent = 'sin conexión';
-  }finally{
-    saving = false;
+    setSyncTag('sin conexión');
   }
 }
 
+// Guardado de una transición deliberada (confirmar, siguiente ronda, reiniciar):
+// acá sí mandamos el estado completo, es una acción de un solo jugador.
+async function saveState(silent){
+  if(!firebaseReady){ setSyncTag('guardado no disponible aquí'); return; }
+  clearLocalEdits();
+  try{
+    const res = await dbStorage.set(STORAGE_KEY, JSON.stringify(state));
+    setSyncTag(res ? 'sincronizado ✓' : 'error al guardar');
+  }catch(e){
+    setSyncTag('sin conexión');
+  }
+}
+
+function applyRemote(remote){
+  if(!remote) return;
+  // conservamos lo que este dispositivo esté escribiendo en esta misma ronda
+  const merged = sameRound(remote) ? overlayLocalEdits(remote) : (clearLocalEdits(), remote);
+  if(JSON.stringify(merged) === JSON.stringify(state)) return;
+  state = merged;
+  render();
+}
+
 async function loadState(){
-  const tag = document.getElementById('syncTag');
   if(!firebaseReady){
-    if(tag) tag.textContent = 'guardado no disponible aquí';
+    setSyncTag('guardado no disponible aquí');
     render();
     return;
   }
   try{
     const res = await dbStorage.get(STORAGE_KEY);
-    if(res && res.value){
-      state = JSON.parse(res.value);
-    }
-    if(tag) tag.textContent = 'sincronizado ✓';
+    if(res && res.value) state = JSON.parse(res.value);
+    setSyncTag('sincronizado ✓');
   }catch(e){
-    if(tag) tag.textContent = 'sin conexión';
+    setSyncTag('sin conexión');
   }
   render();
-}
 
-// poll for updates from other players every 5s, but don't stomp on active typing
-setInterval(async ()=>{
-  if(saving || suspendPoll) return;
-  const active = document.activeElement;
-  if(active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) return;
-  try{
-    const res = await dbStorage.get(STORAGE_KEY);
-    if(res && res.value){
-      const remote = JSON.parse(res.value);
-      if(JSON.stringify(remote) !== JSON.stringify(state)){
-        state = remote;
-        render();
-      }
-    }
-  }catch(e){}
-}, 5000);
+  // A partir de acá escuchamos en tiempo real en vez de consultar cada 5s.
+  // render() conserva el foco y el cursor, así que ya no hace falta ignorar
+  // las actualizaciones remotas mientras alguien escribe.
+  dbStorage.onValue(STORAGE_KEY, raw => {
+    if(suspendPoll) return;
+    applyRemote(parseRemote(raw));
+  });
+}
 
 document.getElementById('topReset').addEventListener('click', doReset);
 
