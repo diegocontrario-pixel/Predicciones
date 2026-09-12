@@ -250,7 +250,7 @@
   </div>
   <div id="app"></div>
   <div class="sync-note">Los resultados se guardan y se comparten con todos los que abran este link.</div>
-  <div class="sync-note" style="opacity:0.5; margin-top:4px;">Versión: 2026-09-11-r3</div>
+  <div class="sync-note" style="opacity:0.5; margin-top:4px;">Versión: 2026-09-11-r4</div>
 </div>
 
 <script>
@@ -403,6 +403,7 @@ function render(){
 function renderInner(){
   const app = document.getElementById('app');
   const topReset = document.getElementById('topReset');
+  if(state.phase !== 'finished') leaderboardRefrescado = false;
   if(topReset) topReset.style.display = (state.phase === 'setup' || showLeaderboard) ? 'none' : 'inline-block';
 
   if(showLeaderboard){
@@ -427,7 +428,14 @@ function renderInner(){
   if(needsSave) saveState();
 
   if(state.phase === 'setup'){ app.innerHTML = renderSetup(); attachSetupHandlers(); return; }
-  if(state.phase === 'finished'){ app.innerHTML = renderFinished(); attachCommonHandlers(); return; }
+  if(state.phase === 'finished'){
+    app.innerHTML = renderFinished();
+    attachCommonHandlers();
+    // el historial en memoria puede estar viejo: si otro celular ya guardó esta
+    // partida, refrescamos para que el botón lo refleje en vez de ofrecer guardarla
+    refrescarLeaderboardSiHaceFalta();
+    return;
+  }
   if(state.phase === 'summary'){ app.innerHTML = renderRoundSummary(); attachSummaryHandlers(); attachCommonHandlers(); return; }
   app.innerHTML = renderGame();
   attachGameHandlers();
@@ -1091,7 +1099,7 @@ function showConfirm(message, onConfirm){
   overlay.id = 'confirmOverlay';
   overlay.innerHTML = `
     <div class="confirm-box">
-      <div class="confirm-msg">${escapeHtml(message)}</div>
+      <div class="confirm-msg" style="white-space:pre-line;">${escapeHtml(message)}</div>
       <div class="confirm-actions">
         <button class="btn-ghost" id="confirmNo">Cancelar</button>
         <button class="btn-primary" id="confirmYes">Confirmar</button>
@@ -1148,6 +1156,17 @@ async function loadLeaderboard(){
   }catch(e){}
 }
 
+// Relee el historial una sola vez por cada llegada a la pantalla final, y
+// repinta solo si cambió. El flag se limpia al salir de esa fase (ver renderInner).
+let leaderboardRefrescado = false;
+async function refrescarLeaderboardSiHaceFalta(){
+  if(leaderboardRefrescado) return;
+  leaderboardRefrescado = true;
+  const antes = JSON.stringify(leaderboard);
+  await loadLeaderboard();
+  if(JSON.stringify(leaderboard) !== antes) render();
+}
+
 // Agregar y borrar leen lo último del servidor dentro de la misma operación
 // atómica. Antes se escribía el array completo desde memoria, así que una
 // pestaña abierta hace rato borraba las partidas guardadas por otro.
@@ -1159,6 +1178,23 @@ async function addGameToLeaderboard(entry){
       if(lista.some(g => g.id === entry.id)) return cur; // ya la guardó otro celular
       lista.unshift(entry);
       return JSON.stringify(lista);
+    });
+    if(merged){ try{ leaderboard = JSON.parse(merged) || []; }catch(e){} }
+  }catch(e){}
+}
+
+// Cierra la tanda en curso: marca como saldadas todas las partidas que aún no
+// lo estén. No borra nada — el acumulado arranca de cero pero el historial queda.
+async function saldarHistorial(){
+  const fecha = new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'});
+  // id propio del corte: dos tandas saldadas el mismo día no deben mezclarse
+  const corteId = Date.now();
+  try{
+    const merged = await dbStorage.transaction(LEADERBOARD_KEY, cur => {
+      let lista = [];
+      if(cur){ try{ lista = JSON.parse(cur) || []; }catch(e){ lista = []; } }
+      if(!lista.some(esDeTandaActual)) return cur; // otro ya la saldó
+      return JSON.stringify(lista.map(g => esDeTandaActual(g) ? {...g, saldadoEn: fecha, corteId} : g));
     });
     if(merged){ try{ leaderboard = JSON.parse(merged) || []; }catch(e){} }
   }catch(e){}
@@ -1199,14 +1235,48 @@ function buildGameEntry(){
   };
 }
 
-function buildBalanceHtml(){
-  const allNames = [];
-  leaderboard.forEach(g=> g.standings.forEach(p=>{ if(!allNames.includes(p.name)) allNames.push(p.name); }));
-  const gamesChrono = [...leaderboard].reverse(); // más antigua primero, para leer de izquierda a derecha
-
-  const netFor = (g, p)=> (p.name === g.winner)
+// Lo que gana (+) o pierde (−) un jugador en una partida: el ganador cobra la
+// suma de lo que pagan los demás; el resto pierde lo suyo.
+function netoDePartida(g, p){
+  return (p.name === g.winner)
     ? g.standings.reduce((acc,s)=> s.name !== g.winner ? acc + s.owes : acc, 0)
     : -p.owes;
+}
+
+// Una partida pertenece a la tanda en curso mientras no se haya saldado.
+// Las partidas viejas no tienen el campo, así que cuentan como tanda actual.
+function esDeTandaActual(g){ return !g.saldadoEn; }
+
+function agruparTandas(juegos){
+  const actual = juegos.filter(esDeTandaActual);
+  const saldadas = [];
+  juegos.filter(g=>!esDeTandaActual(g)).forEach(g=>{
+    const clave = g.corteId !== undefined ? g.corteId : g.saldadoEn;
+    let t = saldadas.find(x=>x.clave === clave);
+    if(!t){ t = {clave, fecha: g.saldadoEn, juegos: []}; saldadas.push(t); }
+    t.juegos.push(g);
+  });
+  return { actual, saldadas };
+}
+
+// Neto acumulado por jugador sobre un conjunto de partidas, de mayor a menor.
+function resumenSaldo(juegos){
+  const nombres = [];
+  juegos.forEach(g=> g.standings.forEach(p=>{ if(!nombres.includes(p.name)) nombres.push(p.name); }));
+  return nombres.map(name=>{
+    const neto = juegos.reduce((acc,g)=>{
+      const p = g.standings.find(s=>s.name===name);
+      return p ? acc + netoDePartida(g,p) : acc;
+    }, 0);
+    return { name, neto };
+  }).sort((a,b)=> b.neto - a.neto);
+}
+
+function tablaSaldosHtml(juegos, titulo, nota){
+  if(!juegos.length) return '';
+  const allNames = [];
+  juegos.forEach(g=> g.standings.forEach(p=>{ if(!allNames.includes(p.name)) allNames.push(p.name); }));
+  const gamesChrono = [...juegos].reverse(); // más antigua primero, para leer de izquierda a derecha
 
   const cellHtml = (net)=>{
     if(net === null) return `<td style="color:var(--muted);">—</td>`;
@@ -1228,7 +1298,7 @@ function buildBalanceHtml(){
     const cells = gamesChrono.map(g=>{
       const p = g.standings.find(s=>s.name===name);
       if(!p) return cellHtml(null);
-      const net = netFor(g,p);
+      const net = netoDePartida(g,p);
       cumulative += net;
       return cellHtml(net);
     }).join('');
@@ -1237,14 +1307,40 @@ function buildBalanceHtml(){
 
   return `
     <div class="card scoreboard">
-      <h3 style="margin-bottom:10px;">Saldos por partida</h3>
+      <h3 style="margin-bottom:${nota ? '4' : '10'}px;">${escapeHtml(titulo)}</h3>
+      ${nota ? `<div style="font-size:12px;color:var(--muted); margin-bottom:10px;">${escapeHtml(nota)}</div>` : ''}
       <div style="overflow-x:auto;">
         <table style="min-width:100%;">
           ${header}
           ${rows}
         </table>
       </div>
+      ${juegos.some(esDeTandaActual) ? `
+      <div class="footer-actions" style="margin-top:4px;">
+        <div></div>
+        <button class="btn-ghost" id="saldarBtn">Saldar y empezar de cero</button>
+      </div>` : ''}
     </div>`;
+}
+
+function buildBalanceHtml(){
+  const { actual, saldadas } = agruparTandas(leaderboard);
+  const tandaActual = actual.length
+    ? tablaSaldosHtml(actual, 'Saldos por partida', 'Tanda en curso. Al saldar, el acumulado vuelve a cero y las partidas quedan guardadas.')
+    : `<div class="card scoreboard">
+         <h3 style="margin-bottom:6px;">Saldos por partida</h3>
+         <div class="empty-note">Cuentas al día ✓<br>La próxima partida que guarden empieza una tanda nueva.</div>
+       </div>`;
+  if(!saldadas.length) return tandaActual;
+  const historicas = saldadas.map(t =>
+    tablaSaldosHtml(t.juegos, 'Tanda saldada el ' + t.fecha, null)
+  ).join('');
+  return `
+    ${tandaActual}
+    <details style="margin-bottom:14px;">
+      <summary>Ver tandas ya saldadas (${saldadas.length})</summary>
+      ${historicas}
+    </details>`;
 }
 
 function renderLeaderboard(){
@@ -1263,7 +1359,7 @@ function renderLeaderboard(){
       <div class="score-pts" style="font-size:16px;">${count} 🏆</div>
     </div>`).join('');
 
-  const games = leaderboard.map(g=>{
+  const tarjetaPartida = g=>{
     const rows = g.standings.map(p=>`
       <div class="score-row">
         <div class="pos">${p.position}</div>
@@ -1279,7 +1375,18 @@ function renderLeaderboard(){
         </div>
         ${rows}
       </div>`;
-  }).join('');
+  };
+
+  const { actual, saldadas } = agruparTandas(leaderboard);
+  const separador = txt => `
+    <div style="display:flex; align-items:center; gap:10px; margin:18px 2px 10px;">
+      <div style="flex:1; height:1px; background:var(--line);"></div>
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em;">${escapeHtml(txt)}</div>
+      <div style="flex:1; height:1px; background:var(--line);"></div>
+    </div>`;
+
+  const games = actual.map(tarjetaPartida).join('')
+    + saldadas.map(t => separador('Saldado el ' + t.fecha) + t.juegos.map(tarjetaPartida).join('')).join('');
 
   return `
     <div class="card">
@@ -1287,6 +1394,7 @@ function renderLeaderboard(){
     </div>
     <div class="card scoreboard">
       <h3 style="margin-bottom:10px;">Victorias por jugador</h3>
+      <div style="font-size:12px;color:var(--muted); margin-top:-6px; margin-bottom:10px;">Histórico completo, no se reinicia al saldar.</div>
       ${winsRows}
     </div>
     ${buildBalanceHtml()}
@@ -1297,6 +1405,20 @@ function renderLeaderboard(){
 function attachLeaderboardHandlers(){
   const closeBtn = document.getElementById('closeLeaderboard');
   if(closeBtn) closeBtn.addEventListener('click', ()=>{ showLeaderboard = false; render(); });
+  const saldar = document.getElementById('saldarBtn');
+  if(saldar) saldar.addEventListener('click', ()=>{
+    const actual = leaderboard.filter(esDeTandaActual);
+    const resumen = resumenSaldo(actual).filter(r=> r.neto !== 0);
+    const detalle = resumen.length
+      ? resumen.map(r=> `${r.name} ${r.neto > 0 ? 'cobra' : 'paga'} ${formatCLP(Math.abs(r.neto))}`).join('\n')
+      : 'Nadie debe nada: los saldos ya están en cero.';
+    const msg = `Saldar ${actual.length} partida${actual.length===1?'':'s'}:\n\n${detalle}\n\n`
+              + 'Las partidas quedan guardadas en el historial, pero el acumulado vuelve a cero.';
+    showConfirm(msg, async ()=>{
+      await saldarHistorial();
+      render();
+    });
+  });
   document.querySelectorAll('.delete-game').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const id = Number(e.currentTarget.dataset.id);
