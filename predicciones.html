@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predicciones — Marcador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt-dark:#0e2b27;
+    --felt:#153a34;
+    --felt-light:#1f4c43;
+    --gold:#d4a24c;
+    --gold-soft:#e8c98a;
+    --coral:#e0604f;
+    --cream:#f4efe3;
+    --muted:#8fb0a6;
+    --line: rgba(244,239,227,0.12);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(212,162,76,0.10), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(224,96,79,0.08), transparent 55%),
+      var(--felt-dark);
+    color:var(--cream);
+    font-family:'Work Sans', sans-serif;
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+  h1,h2,h3{font-family:'Fraunces', serif; font-weight:600; margin:0;}
+  .brand{
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    margin-bottom:22px; flex-wrap:wrap;
+  }
+  .brand h1{font-size:28px; letter-spacing:0.3px;}
+  .brand h1 em{color:var(--gold); font-style:normal;}
+  .brand .tag{color:var(--muted); font-size:13px;}
+  .card{
+    background:linear-gradient(180deg, var(--felt-light), var(--felt));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+    margin-bottom:18px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.25);
+  }
+  label{display:block; font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:6px;}
+  input[type=text], input[type=number], select{
+    width:100%;
+    background:rgba(0,0,0,0.22);
+    border:1px solid var(--line);
+    color:var(--cream);
+    border-radius:9px;
+    padding:10px 12px;
+    font-size:15px;
+    font-family:inherit;
+  }
+  input:focus, select:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  select option{
+    background:#fdfdfa;
+    color:#1c1206;
+  }
+  select option:disabled{
+    color:#9a9a9a;
+  }
+  .row{display:flex; gap:12px; flex-wrap:wrap;}
+  .row > div{flex:1; min-width:140px;}
+  button{
+    font-family:'Work Sans', sans-serif;
+    font-weight:600;
+    border:none;
+    border-radius:10px;
+    padding:12px 20px;
+    font-size:14px;
+    cursor:pointer;
+    transition:transform .08s ease, filter .15s ease;
+  }
+  button:active{transform:scale(0.97);}
+  .btn-primary{background:var(--gold); color:#1c1206;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{background:transparent; color:var(--cream); border:1px solid var(--line);}
+  .btn-ghost:hover{background:rgba(244,239,227,0.06);}
+  .btn-danger{background:transparent; color:var(--coral); border:1px solid rgba(224,96,79,0.4);}
+  .btn-danger:hover{background:rgba(224,96,79,0.1);}
+  .setup-players{display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:18px; margin:14px 0;}
+  .setup-players input{max-width:100%;}
+  .name-slot{display:flex; flex-direction:column; align-items:center; gap:8px; background:rgba(0,0,0,0.15); border:1px solid var(--line); border-radius:12px; padding:14px 10px;}
+  .name-slot select{width:100%;}
+  .name-slot input{width:100%;}
+  .avatar{border-radius:50%; object-fit:cover; display:block; background:var(--felt); border:1px solid var(--line);}
+  .avatar-placeholder{display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; color:var(--muted); background:rgba(0,0,0,0.25);}
+  .avatar-inline{display:inline-flex; vertical-align:middle; margin-right:8px;}
+  .avatar-big{box-shadow:0 6px 18px rgba(0,0,0,0.35); border-width:2px;}
+
+  /* round track */
+  .track{display:flex; gap:6px; overflow-x:auto; padding:4px 2px 14px; margin-bottom:6px;}
+  .track::-webkit-scrollbar{height:6px;}
+  .track::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+  .chip{
+    flex:0 0 auto;
+    min-width:44px;
+    text-align:center;
+    padding:6px 8px;
+    border-radius:8px;
+    font-size:11px;
+    font-weight:600;
+    color:var(--muted);
+    border:1px solid var(--line);
+    background:rgba(0,0,0,0.15);
+    white-space:nowrap;
+  }
+  .chip.done{color:var(--felt-dark); background:var(--muted); border-color:var(--muted); cursor:pointer;}
+  .chip.done:hover{filter:brightness(1.1);}
+  .chip.current{color:#1c1206; background:var(--gold); border-color:var(--gold); box-shadow:0 0 0 3px rgba(212,162,76,0.2);}
+
+  .round-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; flex-wrap:wrap; gap:6px;}
+  .round-title h2{font-size:22px;}
+  .round-sub{color:var(--muted); font-size:13px;}
+  .phase-badge{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+    padding:4px 10px; border-radius:20px; border:1px solid var(--gold); color:var(--gold);
+  }
+
+  .player-row{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .player-row:last-child{border-bottom:none;}
+  .player-name{flex:1; font-weight:600; display:flex; align-items:center; gap:8px;}
+  .mano-badge{
+    font-size:10px; background:var(--gold); color:#1c1206; padding:2px 7px; border-radius:20px; font-weight:700;
+    letter-spacing:0.04em;
+  }
+  .player-row input{width:90px; text-align:center;}
+  .forbidden-note{font-size:12px; color:var(--coral); margin-top:4px;}
+
+  .scoreboard{margin-top:6px;}
+  .score-row{
+    display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .score-row:last-child{border-bottom:none;}
+  .pos{width:24px; color:var(--muted); font-family:'Fraunces',serif; font-size:16px;}
+  .score-name{flex:1; font-weight:600;}
+  .score-pts{font-family:'Fraunces',serif; font-size:20px; color:var(--gold-soft);}
+  .score-diff{font-size:12px; color:var(--muted); min-width:70px; text-align:right;}
+  .queso{font-size:11px; color:var(--coral); margin-left:6px;}
+  .leader-tag{font-size:11px; color:var(--gold-soft); margin-left:6px; font-weight:600;}
+
+  details{margin-top:8px;}
+  summary{cursor:pointer; color:var(--muted); font-size:13px; padding:6px 0;}
+  table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+  th,td{padding:6px 8px; text-align:center; border-bottom:1px solid var(--line);}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;}
+  td:first-child, th:first-child{text-align:left;}
+
+  .footer-actions{display:flex; justify-content:space-between; gap:10px; margin-top:18px; flex-wrap:wrap;}
+  .empty-note{color:var(--muted); font-size:13px; text-align:center; padding:8px 0;}
+  .sync-note{color:var(--muted); font-size:11px; text-align:center; margin-top:18px;}
+
+  /* animación de inicio de partida */
+  #introOverlay{
+    position:fixed; inset:0; z-index:9999;
+    background: radial-gradient(ellipse at center, rgba(212,162,76,0.14), var(--felt-dark) 72%);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    animation: introBgIn 0.25s ease;
+  }
+  #introOverlay.intro-fadeout{ animation: introFadeOut 0.45s ease forwards; }
+  @keyframes introBgIn{ from{opacity:0;} to{opacity:1;} }
+  @keyframes introFadeOut{ to{opacity:0;} }
+  .intro-grid{
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+    gap:28px 36px; max-width:720px; padding:0 24px; position:relative; z-index:1;
+  }
+  .intro-player{
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    opacity:0; transform:scale(0.25);
+    animation: introPop 0.55s cubic-bezier(.2,1.5,.4,1) forwards;
+  }
+  .intro-left{ animation-name: introPopLeft; }
+  .intro-right{ animation-name: introPopRight; }
+  @keyframes introPopLeft{
+    0%{opacity:0; transform:translateX(-120px) scale(0.3) rotate(-10deg);}
+    60%{opacity:1; transform:translateX(10px) scale(1.15) rotate(3deg);}
+    100%{opacity:1; transform:translateX(0) scale(1) rotate(0);}
+  }
+  @keyframes introPopRight{
+    0%{opacity:0; transform:translateX(120px) scale(0.3) rotate(10deg);}
+    60%{opacity:1; transform:translateX(-10px) scale(1.15) rotate(-3deg);}
+    100%{opacity:1; transform:translateX(0) scale(1) rotate(0);}
+  }
+  .intro-player img, .intro-player .avatar{
+    width:110px !important; height:110px !important;
+    border:3px solid var(--gold) !important;
+    box-shadow:0 0 30px rgba(212,162,76,0.5);
+  }
+  .intro-name{
+    font-family:'Fraunces', serif; font-weight:700; font-size:17px;
+    color:var(--cream); text-transform:uppercase; letter-spacing:0.06em;
+    text-shadow:0 2px 8px rgba(0,0,0,0.6);
+  }
+  .intro-vs{
+    position:absolute; top:50%; left:50%; z-index:2;
+    font-family:'Fraunces', serif; font-weight:700; font-size:72px;
+    color:var(--coral);
+    text-shadow:0 0 24px rgba(224,96,79,0.85), 0 0 50px rgba(224,96,79,0.4);
+    opacity:0; transform:translate(-50%,-50%) scale(3) rotate(-16deg);
+    animation: vsSlam 0.55s 0.85s cubic-bezier(.34,1.6,.5,1) forwards;
+  }
+  @keyframes vsSlam{
+    0%{opacity:0; transform:translate(-50%,-50%) scale(3) rotate(-16deg);}
+    60%{opacity:1; transform:translate(-50%,-50%) scale(0.85) rotate(6deg);}
+    100%{opacity:1; transform:translate(-50%,-50%) scale(1) rotate(0);}
+  }
+
+  /* modal de confirmación propio (no depende de confirm() del navegador) */
+  #confirmOverlay{
+    position:fixed; inset:0; z-index:10000;
+    background:rgba(0,0,0,0.55);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    animation: introBgIn 0.15s ease;
+  }
+  .confirm-box{
+    background:linear-gradient(180deg, var(--felt-light), var(--felt));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+    max-width:340px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
+  }
+  .confirm-msg{color:var(--cream); font-size:15px; line-height:1.5; margin-bottom:18px;}
+  .confirm-actions{display:flex; justify-content:flex-end; gap:10px;}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <h1><em>Predicciones</em> · Marcador</h1>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="tag" id="syncTag">sincronizando…</div>
+      <button class="btn-ghost" id="topReset" style="display:none; padding:8px 14px; font-size:13px;">Nueva partida</button>
+    </div>
+  </div>
+  <div id="app"></div>
+  <div class="sync-note">Los resultados se guardan y se comparten con todos los que abran este link.</div>
+  <div class="sync-note" style="opacity:0.5; margin-top:4px;">Versión: 2026-08-29-r2</div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAD0Z2DQTEIuLzmxTrdflwogZr_0RakBns",
+  authDomain: "predicciones-marcador.firebaseapp.com",
+  databaseURL: "https://predicciones-marcador-default-rtdb.firebaseio.com",
+  projectId: "predicciones-marcador",
+  storageBucket: "predicciones-marcador.firebasestorage.app",
+  messagingSenderId: "140977960387",
+  appId: "1:140977960387:web:fc5e14b2a2d60eddf37976"
+};
+let firebaseReady = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  firebaseReady = true;
+}catch(e){ console.error('Firebase init error', e); }
+
+const dbStorage = {
+  async get(key){
+    if(!firebaseReady) throw new Error('Firebase no disponible');
+    const snap = await firebase.database().ref(key).once('value');
+    const val = snap.val();
+    return (val !== null && val !== undefined) ? { key, value: val } : null;
+  },
+  async set(key, value){
+    if(!firebaseReady) throw new Error('Firebase no disponible');
+    await firebase.database().ref(key).set(value);
+    return { key, value };
+  }
+};
+
+const SPECIALS_3 = ['Sin comodín','Ciego','Perder'];
+const SPECIALS_N = ['Sin comodín','Ciego','Perder','Elige'];
+
+function buildRounds(numPlayers){
+  const specials = numPlayers === 3 ? SPECIALS_3 : SPECIALS_N;
+  const down = [7,6,5,4,3,2,1].map(m => ({manos:m, label:`${m} carta${m===1?'':'s'}`, short:`${m}`}));
+  const spec = specials.map(name => ({manos:7, label:`7 · ${name}`, short:name, kind: name === 'Perder' ? 'perder' : undefined}));
+  const up = [1,2,3,4,5,6,7].map(m => ({manos:m, label:`${m} carta${m===1?'':'s'}`, short:`${m}`}));
+  return [...down, ...spec, ...up];
+}
+
+function emptyState(){
+  return { phase:'setup', players:[], startDealer:0, rounds:[], roundIdx:0,
+           predicciones:{}, resultados:{}, history:[] };
+}
+
+let state = emptyState();
+let localDraft = {}; // unsynced input values while typing
+let viewRoundIdx = null; // round history panel currently open (not persisted)
+
+function isPerderRound(round){
+  return !!(round && round.short === 'Perder');
+}
+
+function pts(pred, real, round){
+  if(real === null || real === undefined || real === '') return null;
+  real = Number(real);
+  if(isPerderRound(round)){
+    if(real === 0) return 10;
+    return -2 * real;
+  }
+  if(pred === real) return 10 + 2*real;
+  return 2*real;
+}
+
+function totals(){
+  const t = {};
+  state.players.forEach((p,i)=> t[i] = 0);
+  state.history.forEach(round=>{
+    state.players.forEach((p,i)=>{
+      const s = round.scores[i];
+      if(typeof s === 'number') t[i]+=s;
+    });
+  });
+  return t;
+}
+
+function healHistory(){
+  let changed = false;
+  state.history.forEach((h, idx)=>{
+    const round = state.rounds[idx];
+    if(round && isPerderRound(round)){
+      state.players.forEach((_,i)=>{
+        const correct = pts(h.predicciones[i], h.resultados[i], round);
+        if(h.scores[i] !== correct){
+          h.scores[i] = correct;
+          changed = true;
+        }
+      });
+    }
+  });
+  return changed;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const topReset = document.getElementById('topReset');
+  if(topReset) topReset.style.display = (state.phase === 'setup' || showLeaderboard) ? 'none' : 'inline-block';
+
+  if(showLeaderboard){
+    app.innerHTML = renderLeaderboard();
+    attachLeaderboardHandlers();
+    return;
+  }
+
+  let needsSave = false;
+
+  // auto-corrección: una ronda "Perder" nunca debe quedar en fase de predicción
+  if(state.phase === 'predict' && state.rounds[state.roundIdx] && isPerderRound(state.rounds[state.roundIdx])){
+    state.predicciones = {};
+    state.players.forEach((_,i)=>{ state.predicciones[i] = 0; });
+    state.phase = 'result';
+    needsSave = true;
+  }
+
+  // auto-corrección: puntajes de rondas "Perder" ya jugadas con la fórmula vieja
+  if(healHistory()) needsSave = true;
+
+  if(needsSave) saveState();
+
+  if(state.phase === 'setup'){ app.innerHTML = renderSetup(); attachSetupHandlers(); return; }
+  if(state.phase === 'finished'){ app.innerHTML = renderFinished(); attachCommonHandlers(); return; }
+  if(state.phase === 'summary'){ app.innerHTML = renderRoundSummary(); attachSummaryHandlers(); attachCommonHandlers(); return; }
+  app.innerHTML = renderGame();
+  attachGameHandlers();
+  attachCommonHandlers();
+}
+
+const DEFAULT_NAMES = ['Diego','Gonzalo','Nicolas','Camilo','Marco'];
+
+const DEFAULT_AVATARS = {
+  "Diego": "data:image/jpeg;base64,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",
+  "Marco": "data:image/jpeg;base64,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",
+  "Gonzalo": "data:image/jpeg;base64,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",
+  "Camilo": "data:image/jpeg;base64,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",
+  "Nicolas": "data:image/jpeg;base64,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",
+};
+
+let avatars = {...DEFAULT_AVATARS};
+
+function avatarHtml(name, size, inline){
+  size = size || 32;
+  const key = (name||'').trim();
+  const src = key ? avatars[key] : null;
+  const cls = inline ? 'avatar avatar-inline' : 'avatar';
+  if(src){
+    return `<img class="${cls}" style="width:${size}px;height:${size}px;" src="${src}">`;
+  }
+  const initial = key ? key[0].toUpperCase() : '?';
+  return `<div class="${cls} avatar-placeholder" style="width:${size}px;height:${size}px;">${initial}</div>`;
+}
+
+
+function renderSetup(){
+  const n = localDraft.numPlayers || 4;
+  if(!localDraft.names) localDraft.names = [];
+  if(!localDraft.nameMode) localDraft.nameMode = [];
+  let nameInputs = '';
+  for(let i=0;i<n;i++){
+    const mode = localDraft.nameMode[i] || '';
+    const val = localDraft.names[i] || '';
+    let opts = `<option value="" ${mode==='' ? 'selected':''} disabled>Seleccionar jugador</option>`;
+    opts += DEFAULT_NAMES.map(nm => {
+      const takenByOther = localDraft.names.some((v,j)=> j!==i && localDraft.nameMode[j]==='preset' && v===nm);
+      const selected = mode==='preset' && val===nm;
+      return `<option value="${nm}" ${selected?'selected':''} ${takenByOther && !selected ? 'disabled':''}>${nm}${takenByOther && !selected ? ' (ya elegido)' : ''}</option>`;
+    }).join('');
+    opts += `<option value="__other__" ${mode==='other' ? 'selected':''}>Otro…</option>`;
+    nameInputs += `
+      <div class="name-slot">
+        ${avatarHtml(val, 220).replace('class="avatar', 'class="avatar avatar-big')}
+        <select class="name-select" data-idx="${i}">${opts}</select>
+        <input type="text" class="name-input" data-idx="${i}" placeholder="Nombre" value="${escapeHtml(mode==='other' ? val : '')}" style="${mode==='other' ? '' : 'display:none;'}">
+      </div>`;
+  }
+  let dealerOpts = '';
+  for(let i=0;i<n;i++){
+    const val = (localDraft.names && localDraft.names[i]) || `Jugador ${i+1}`;
+    dealerOpts += `<option value="${i}">${escapeHtml(val)}</option>`;
+  }
+  return `
+  <div class="card">
+    <h2 style="margin-bottom:14px;">Nueva partida</h2>
+    <label for="numPlayers">Cantidad de jugadores</label>
+    <select id="numPlayers">
+      ${[3,4,5,6,7].map(x=>`<option value="${x}" ${x===n?'selected':''}>${x} jugadores</option>`).join('')}
+    </select>
+    <div style="margin-top:16px;">
+      <label>Nombres (en orden de predicción)</label>
+      <div class="setup-players">${nameInputs}</div>
+    </div>
+    <div style="margin-top:16px;">
+      <label for="startDealer">¿Quién reparte / es mano primero?</label>
+      <select id="startDealer">${dealerOpts}</select>
+    </div>
+    <div style="margin-top:16px;">
+      <label for="monto">Monto de la apuesta (lo que paga cada perdedor al ganador)</label>
+      <input type="number" id="monto" min="0" step="1" placeholder="Ej: 2000" value="${localDraft.monto || ''}">
+      <div style="font-size:12px;color:var(--muted); margin-top:4px;">Quien quede QUESO (42+ puntos abajo del ganador) paga el doble.</div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn-ghost" id="viewLeaderboardSetup">Ver historial de partidas</button>
+      <button class="btn-primary" id="startGame">Empezar partida</button>
+    </div>
+  </div>`;
+}
+
+function playIntroAnimation(names, onComplete){
+  suspendPoll = true;
+  const overlay = document.createElement('div');
+  overlay.id = 'introOverlay';
+
+  const playersHtml = names.map((name,i)=>{
+    const side = i % 2 === 0 ? 'intro-left' : 'intro-right';
+    return `<div class="intro-player ${side}" style="animation-delay:${i*0.12}s;">
+      ${avatarHtml(name, 110)}
+      <div class="intro-name">${escapeHtml(name)}</div>
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div class="intro-grid">${playersHtml}</div>
+    <div class="intro-vs">VS</div>
+  `;
+  document.body.appendChild(overlay);
+
+  setTimeout(()=>{
+    overlay.classList.add('intro-fadeout');
+    setTimeout(()=>{
+      overlay.remove();
+      suspendPoll = false;
+      onComplete();
+    }, 450);
+  }, 2100);
+}
+
+function attachSetupHandlers(){
+  const vls = document.getElementById('viewLeaderboardSetup');
+  if(vls) vls.addEventListener('click', ()=>{ showLeaderboard = true; render(); });
+  const numSel = document.getElementById('numPlayers');
+  numSel.addEventListener('change', e=>{
+    localDraft.numPlayers = Number(e.target.value);
+    render();
+  });
+  document.querySelectorAll('.name-select').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const idx = Number(e.target.dataset.idx);
+      if(e.target.value === '__other__'){
+        localDraft.nameMode[idx] = 'other';
+        localDraft.names[idx] = '';
+      } else {
+        localDraft.nameMode[idx] = 'preset';
+        localDraft.names[idx] = e.target.value;
+      }
+      render();
+    });
+  });
+  document.querySelectorAll('.name-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = Number(e.target.dataset.idx);
+      localDraft.names[idx] = e.target.value;
+    });
+  });
+  const dealerSel = document.getElementById('startDealer');
+  dealerSel.addEventListener('change', e=>{ localDraft.startDealer = Number(e.target.value); });
+  const montoInp = document.getElementById('monto');
+  montoInp.addEventListener('input', e=>{ localDraft.monto = e.target.value; });
+
+  document.getElementById('startGame').addEventListener('click', ()=>{
+    const n = localDraft.numPlayers || 4;
+    const names = [];
+    for(let i=0;i<n;i++){
+      const v = (localDraft.names && localDraft.names[i] || '').trim();
+      names.push(v || `Jugador ${i+1}`);
+    }
+    state = {
+      phase:'predict',
+      players: names,
+      startDealer: localDraft.startDealer || 0,
+      monto: Number(localDraft.monto) || 0,
+      rounds: buildRounds(n),
+      roundIdx: 0,
+      predicciones: {},
+      resultados: {},
+      history: []
+    };
+    localDraft = {};
+    playIntroAnimation(names, ()=>{
+      saveState();
+      render();
+    });
+  });
+}
+
+function currentDealerIdx(){
+  const n = state.players.length;
+  return (state.startDealer + state.roundIdx) % n;
+}
+
+function forbiddenForLast(round, preds, lastIdx){
+  const n = state.players.length;
+  if(n < 2) return null;
+  let sum = 0;
+  for(let i=0;i<n;i++){
+    if(i === lastIdx) continue;
+    const v = preds[i];
+    if(v === undefined || v === null || v === '') return null;
+    sum += Number(v);
+  }
+  const forbidden = round.manos - sum;
+  if(forbidden < 0 || forbidden > round.manos) return null;
+  return forbidden;
+}
+
+function roundDetailHtml(idx){
+  const round = state.rounds[idx];
+  const h = state.history[idx];
+  if(!round || !h) return '';
+  const rows = state.players.map((name,i)=>`
+    <div class="score-row">
+      <div class="score-name">${avatarHtml(name,22,true)}${escapeHtml(name)}</div>
+      <div style="flex:2; text-align:center; font-size:13px; color:var(--muted);">Predijo ${h.predicciones[i]} · Ganó ${h.resultados[i]}</div>
+      <div class="score-pts">${h.scores[i]}</div>
+    </div>`).join('');
+  return `
+    <div class="card" style="border:1px solid var(--gold); margin-top:10px;">
+      <div class="round-title">
+        <h3 style="font-size:17px;">Ronda ${idx+1} · ${escapeHtml(round.label)}</h3>
+        <button class="btn-ghost" id="closeRoundDetail" style="padding:4px 10px;font-size:12px;">Cerrar</button>
+      </div>
+      ${rows}
+    </div>`;
+}
+
+function renderGame(){
+  const round = state.rounds[state.roundIdx];
+  const dealerIdx = currentDealerIdx();
+  const phase = state.phase; // 'predict' or 'result'
+  const preds = state.predicciones;
+  const lastIdx = (dealerIdx - 1 + state.players.length) % state.players.length;
+  const forbidden = forbiddenForLast(round, preds, lastIdx);
+
+  const track = state.rounds.map((r,i)=>{
+    let cls = 'chip';
+    if(i < state.roundIdx) cls += ' done';
+    else if(i === state.roundIdx) cls += ' current';
+    const clickable = i < state.roundIdx ? ` data-round-idx="${i}"` : '';
+    return `<div class="${cls}"${clickable} title="${escapeHtml(r.label)}">${escapeHtml(r.short)}</div>`;
+  }).join('');
+
+  let playerRows = '';
+  state.players.forEach((name,i)=>{
+    const isMano = i === dealerIdx;
+    const predVal = preds[i] !== undefined ? preds[i] : '';
+    const resVal = state.resultados[i] !== undefined ? state.resultados[i] : '';
+    let inputHtml;
+    if(phase === 'predict'){
+      const isLast = i === lastIdx;
+      inputHtml = `<input type="number" min="0" max="${round.manos}" class="pred-input" data-idx="${i}" value="${predVal}" placeholder="0">`;
+      const noteText = (isLast && forbidden!==null) ? `No puede decir ${forbidden}` : '';
+      playerRows += `<div class="player-row">
+        <div class="player-name">${avatarHtml(name,28,true)}${escapeHtml(name)} ${isMano ? '<span class="mano-badge">PARTE</span>' : ''}</div>
+        <div>${inputHtml}${isLast ? `<div class="forbidden-note" id="forbiddenNote">${noteText}</div>` : ''}</div>
+      </div>`;
+    } else {
+      inputHtml = `<input type="number" min="0" max="${round.manos}" class="res-input" data-idx="${i}" value="${resVal}" placeholder="0">`;
+      playerRows += `<div class="player-row">
+        <div class="player-name">${avatarHtml(name,28,true)}${escapeHtml(name)} ${isMano ? '<span class="mano-badge">PARTE</span>' : ''}</div>
+        <div style="font-size:12px;color:var(--muted); text-align:center; margin-bottom:4px;">predijo ${preds[i]}</div>
+        <div>${inputHtml}</div>
+      </div>`;
+    }
+  });
+
+  const resultSum = state.players.reduce((acc,_,i)=> acc + (state.resultados[i] !== undefined && state.resultados[i] !== '' ? Number(state.resultados[i]) : 0), 0);
+  const allResultsFilled = state.players.every((_,i)=> state.resultados[i] !== undefined && state.resultados[i] !== '');
+  const allPredsFilled = state.players.every((_,i)=> preds[i] !== undefined && preds[i] !== '');
+  const lastPredIsForbidden = forbidden !== null && preds[lastIdx] !== undefined && preds[lastIdx] !== '' && Number(preds[lastIdx]) === forbidden;
+  const canConfirmPredict = allPredsFilled && !lastPredIsForbidden;
+  const canConfirmResult = allResultsFilled && resultSum === round.manos;
+
+  return `
+    <div class="card">
+      <div class="round-title">
+        <h2>Ronda ${state.roundIdx+1} de ${state.rounds.length} · ${escapeHtml(round.label)}</h2>
+        <div class="phase-badge">${phase === 'predict' ? 'Predicciones' : 'Resultados'}</div>
+      </div>
+      <div class="round-sub">Manos en juego: ${round.manos}${isPerderRound(round) ? ' · Ronda especial: todos predicen 0. Si ganas 0 manos, +10 puntos; si ganas alguna, -2 por cada una' : ''}</div>
+      <div class="track" style="margin-top:14px;">${track}</div>
+      ${viewRoundIdx !== null ? roundDetailHtml(viewRoundIdx) : ''}
+      <div style="margin-top:10px;">${playerRows}</div>
+      ${phase === 'result' ? `<div class="forbidden-note" id="resultSumNote" style="text-align:right;">${allResultsFilled && !canConfirmResult ? `La suma de manos ganadas debe ser ${round.manos} (va en ${resultSum})` : ''}</div>` : ''}
+      <div class="footer-actions">
+        <div></div>
+        ${phase === 'predict'
+          ? `<button class="btn-primary" id="confirmPredict" ${canConfirmPredict?'':'disabled style="opacity:.5;cursor:not-allowed;"'}>Confirmar predicciones</button>`
+          : `<button class="btn-primary" id="confirmResult" ${canConfirmResult?'':'disabled style="opacity:.5;cursor:not-allowed;"'}>Confirmar resultados</button>`}
+      </div>
+    </div>
+    ${scoreboardBlockHtml()}
+  `;
+}
+
+function scoreboardBlockHtml(){
+  const totalsMap = totals();
+  const sorted = state.players.map((name,i)=>({name, idx:i, total: totalsMap[i]}))
+    .sort((a,b)=> b.total - a.total);
+  const leaderTotal = sorted.length ? sorted[0].total : 0;
+
+  let scoreboard = sorted.map((p,pos)=>{
+    const diff = leaderTotal - p.total;
+    const queso = diff >= 42 ? '<span class="queso">🧀 QUESO</span>' : '';
+    const leaderTag = (p.total > 0 && p.total === leaderTotal) ? '<span class="leader-tag">¡Hay que bajarlo!</span>' : '';
+    return `<div class="score-row">
+      <div class="pos">${pos+1}</div>
+      <div class="score-name">${avatarHtml(p.name,24,true)}${escapeHtml(p.name)}${queso}${leaderTag}</div>
+      <div class="score-pts">${p.total}</div>
+      <div class="score-diff">${pos===0 ? '' : '−'+diff}</div>
+    </div>`;
+  }).join('');
+
+  let historyRows = '';
+  state.history.forEach((h,ri)=>{
+    historyRows += `<tr><td>${escapeHtml(state.rounds[ri].short)}</td>`;
+    state.players.forEach((p,i)=>{
+      const pr = h.predicciones[i];
+      const rs = h.resultados[i];
+      const sc = h.scores[i];
+      historyRows += `<td>${pr}/${rs} <br><span style="color:var(--gold-soft)">${sc}</span></td>`;
+    });
+    historyRows += `</tr>`;
+  });
+  const historyTable = state.history.length ? `
+    <details>
+      <summary>Ver historial de rondas (${state.history.length})</summary>
+      <table>
+        <tr><th>Ronda</th>${state.players.map(p=>`<th>${escapeHtml(p)}</th>`).join('')}</tr>
+        ${historyRows}
+      </table>
+    </details>` : '';
+
+  return `
+    <div class="card scoreboard">
+      <h3 style="margin-bottom:10px;">Puntajes</h3>
+      ${scoreboard || '<div class="empty-note">Aún no hay puntajes</div>'}
+      ${historyTable}
+    </div>`;
+}
+
+function renderRoundSummary(){
+  const idx = state.roundIdx;
+  const round = state.rounds[idx];
+  const h = state.history[idx];
+  const track = state.rounds.map((r,i)=>{
+    let cls = 'chip';
+    if(i < idx) cls += ' done';
+    else if(i === idx) cls += ' current';
+    const clickable = i < idx ? ` data-round-idx="${i}"` : '';
+    return `<div class="${cls}"${clickable} title="${escapeHtml(r.label)}">${escapeHtml(r.short)}</div>`;
+  }).join('');
+  const rows = state.players.map((name,i)=>`
+    <div class="player-row">
+      <div class="player-name">${avatarHtml(name,28,true)}${escapeHtml(name)}</div>
+      <div style="flex:2; text-align:center; font-size:13px; color:var(--muted);">Predijo ${h.predicciones[i]} · Ganó ${h.resultados[i]}</div>
+      <div class="score-pts" style="min-width:56px; text-align:right;">${h.scores[i]}</div>
+    </div>`).join('');
+  const isLast = idx + 1 >= state.rounds.length;
+  return `
+    <div class="card">
+      <div class="round-title">
+        <h2>Ronda ${idx+1} de ${state.rounds.length} · ${escapeHtml(round.label)}</h2>
+        <div class="phase-badge">Resultado de la ronda</div>
+      </div>
+      <div class="track" style="margin-top:14px;">${track}</div>
+      ${viewRoundIdx !== null && viewRoundIdx !== idx ? roundDetailHtml(viewRoundIdx) : ''}
+      <div style="margin-top:10px;">${rows}</div>
+      <div class="footer-actions">
+        <div></div>
+        <button class="btn-primary" id="nextRound">${isLast ? 'Ver resultado final' : 'Siguiente ronda'}</button>
+      </div>
+    </div>
+    ${scoreboardBlockHtml()}
+  `;
+}
+
+function attachSummaryHandlers(){
+  document.querySelectorAll('.chip.done').forEach(ch=>{
+    ch.addEventListener('click', e=>{
+      const idx = Number(e.currentTarget.dataset.roundIdx);
+      viewRoundIdx = (viewRoundIdx === idx) ? null : idx;
+      render();
+    });
+  });
+  const closeBtn = document.getElementById('closeRoundDetail');
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{ viewRoundIdx = null; render(); });
+  const nextBtn = document.getElementById('nextRound');
+  if(nextBtn) nextBtn.addEventListener('click', ()=>{
+    viewRoundIdx = null;
+    if(state.roundIdx + 1 >= state.rounds.length){
+      state.phase = 'finished';
+    } else {
+      state.roundIdx += 1;
+      const round = state.rounds[state.roundIdx];
+      if(isPerderRound(round)){
+        state.predicciones = {};
+        state.players.forEach((_,i)=>{ state.predicciones[i] = 0; });
+        state.phase = 'result';
+      } else {
+        state.phase = 'predict';
+      }
+    }
+    saveState();
+    render();
+  });
+}
+
+function formatCLP(n){
+  try{ return new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n); }
+  catch(e){ return '$'+n; }
+}
+
+function computeFinalStandings(){
+  const totalsMap = totals();
+  const sorted = state.players.map((name,i)=>({name, idx:i, total: totalsMap[i]}))
+    .sort((a,b)=> b.total - a.total);
+  const winner = sorted[0];
+  const n = state.players.length;
+  let quesoCount = 0;
+  const standings = sorted.map((p,pos)=>{
+    const diff = winner ? winner.total - p.total : 0;
+    const isQueso = pos > 0 && diff >= 42;
+    const exempt = pos === 1 && n >= 4 && !isQueso; // 2do lugar no paga en partidas de 4+, salvo que también sea QUESO
+    let owes = 0;
+    if(pos > 0 && state.monto > 0 && !exempt){
+      owes = isQueso ? (state.monto * 2 + quesoCount * 1000) : state.monto;
+    }
+    if(isQueso && !exempt) quesoCount += 1;
+    return { name: p.name, total: p.total, position: pos+1, isQueso, owes, exempt };
+  });
+  return { winner, standings };
+}
+
+function renderFinished(){
+  const { winner, standings } = computeFinalStandings();
+  let rows = standings.map(p=>`
+    <div class="score-row">
+      <div class="pos">${p.position}</div>
+      <div class="score-name">${avatarHtml(p.name,24,true)}${escapeHtml(p.name)} ${p.isQueso ? '<span class="queso">🧀 QUESO</span>' : ''}</div>
+      <div class="score-pts">${p.total}</div>
+    </div>`).join('');
+
+  let payoutSection = '';
+  if(state.monto > 0 && winner){
+    const losers = standings.filter(p=>p.position > 1 && !p.exempt);
+    const payoutRows = losers.map(p=>`
+      <div class="score-row">
+        <div class="score-name">${avatarHtml(p.name,24,true)}${escapeHtml(p.name)} ${p.isQueso ? '<span class="queso">🧀 QUESO</span>' : ''}</div>
+        <div class="score-pts" style="font-size:16px;">${formatCLP(p.owes)}</div>
+      </div>`).join('');
+    const total = losers.reduce((acc,p)=> acc + p.owes, 0);
+    payoutSection = `
+    <div class="card scoreboard">
+      <h3 style="margin-bottom:10px;">Pagos a ${escapeHtml(winner.name)}</h3>
+      ${payoutRows}
+      <div class="score-row" style="border-top:1px solid var(--line); margin-top:4px; padding-top:12px;">
+        <div class="score-name" style="color:var(--gold-soft);">Total a cobrar</div>
+        <div class="score-pts">${formatCLP(total)}</div>
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div class="card" style="text-align:center;">
+      <div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;">Partida terminada</div>
+      <h2 style="font-size:30px; color:var(--gold-soft); margin:8px 0 4px;">🏆 ${escapeHtml(winner ? winner.name : '')}</h2>
+      <div style="color:var(--muted); font-size:14px;">Ganador con ${winner ? winner.total : 0} puntos</div>
+    </div>
+    <div class="card scoreboard">
+      <h3 style="margin-bottom:10px;">Resultado final</h3>
+      ${rows}
+    </div>
+    ${payoutSection}
+    <div class="footer-actions">
+      <button class="btn-ghost" id="viewLeaderboard">Ver historial de partidas</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-ghost" id="saveGameBtn">Guardar partida</button>
+        <button class="btn-primary" id="resetGame">Nueva partida</button>
+      </div>
+    </div>
+  `;
+}
+
+function setButtonEnabled(btn, enabled){
+  if(!btn) return;
+  btn.disabled = !enabled;
+  btn.style.opacity = enabled ? '1' : '.5';
+  btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+}
+
+function updatePredictUI(){
+  const round = state.rounds[state.roundIdx];
+  const dealerIdx = currentDealerIdx();
+  const lastIdx = (dealerIdx - 1 + state.players.length) % state.players.length;
+  const forbidden = forbiddenForLast(round, state.predicciones, lastIdx);
+  const noteEl = document.getElementById('forbiddenNote');
+  if(noteEl) noteEl.textContent = forbidden !== null ? `No puede decir ${forbidden}` : '';
+  const allFilled = state.players.every((_,i)=> state.predicciones[i] !== undefined && state.predicciones[i] !== '');
+  const lastVal = state.predicciones[lastIdx];
+  const lastIsForbidden = forbidden !== null && lastVal !== undefined && lastVal !== '' && Number(lastVal) === forbidden;
+  const canConfirm = allFilled && !lastIsForbidden;
+  setButtonEnabled(document.getElementById('confirmPredict'), canConfirm);
+}
+
+function updateResultUI(){
+  const round = state.rounds[state.roundIdx];
+  const resultSum = state.players.reduce((acc,_,i)=> acc + (state.resultados[i] !== undefined && state.resultados[i] !== '' ? Number(state.resultados[i]) : 0), 0);
+  const allFilled = state.players.every((_,i)=> state.resultados[i] !== undefined && state.resultados[i] !== '');
+  const canConfirm = allFilled && resultSum === round.manos;
+  const noteEl = document.getElementById('resultSumNote');
+  if(noteEl) noteEl.textContent = (allFilled && !canConfirm) ? `La suma de manos ganadas debe ser ${round.manos} (va en ${resultSum})` : '';
+  setButtonEnabled(document.getElementById('confirmResult'), canConfirm);
+}
+
+function biddingOrder(){
+  const dealerIdx = currentDealerIdx();
+  const n = state.players.length;
+  const order = [];
+  for(let k=0;k<n;k++) order.push((dealerIdx+k) % n);
+  return order;
+}
+
+function attachEnterAdvance(selector, confirmBtnId){
+  const order = biddingOrder();
+  document.querySelectorAll(selector).forEach(inp=>{
+    inp.addEventListener('keydown', e=>{
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      const idx = Number(inp.dataset.idx);
+      const pos = order.indexOf(idx);
+      const nextIdx = order[pos+1];
+      if(nextIdx !== undefined){
+        const nextInput = document.querySelector(`${selector}[data-idx="${nextIdx}"]`);
+        if(nextInput){ nextInput.focus(); nextInput.select(); }
+      } else {
+        const btn = document.getElementById(confirmBtnId);
+        if(btn && !btn.disabled) btn.click();
+        else inp.blur();
+      }
+    });
+  });
+}
+
+function attachGameHandlers(){
+  if(state.phase === 'predict'){
+    const dealerIdx = currentDealerIdx();
+    const manoInput = document.querySelector(`.pred-input[data-idx="${dealerIdx}"]`);
+    if(manoInput && document.activeElement !== manoInput){
+      manoInput.focus();
+      if(manoInput.value) manoInput.select();
+    }
+  }
+  if(state.phase === 'result'){
+    const dealerIdx = currentDealerIdx();
+    const manoInput = document.querySelector(`.res-input[data-idx="${dealerIdx}"]`);
+    if(manoInput && document.activeElement !== manoInput){
+      manoInput.focus();
+      if(manoInput.value) manoInput.select();
+    }
+  }
+  document.querySelectorAll('.chip.done').forEach(ch=>{
+    ch.addEventListener('click', e=>{
+      const idx = Number(e.currentTarget.dataset.roundIdx);
+      viewRoundIdx = (viewRoundIdx === idx) ? null : idx;
+      render();
+    });
+  });
+  const closeBtn = document.getElementById('closeRoundDetail');
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{ viewRoundIdx = null; render(); });
+  document.querySelectorAll('.pred-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.idx);
+      state.predicciones[i] = e.target.value === '' ? '' : Number(e.target.value);
+      updatePredictUI();
+      saveState(true);
+    });
+  });
+  document.querySelectorAll('.res-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.idx);
+      state.resultados[i] = e.target.value === '' ? '' : Number(e.target.value);
+      updateResultUI();
+      saveState(true);
+    });
+  });
+  attachEnterAdvance('.pred-input', 'confirmPredict');
+  attachEnterAdvance('.res-input', 'confirmResult');
+  const cp = document.getElementById('confirmPredict');
+  if(cp) cp.addEventListener('click', ()=>{
+    state.phase = 'result';
+    saveState();
+    render();
+  });
+  const cr = document.getElementById('confirmResult');
+  if(cr) cr.addEventListener('click', ()=>{
+    const round = state.rounds[state.roundIdx];
+    const scores = {};
+    state.players.forEach((_,i)=>{
+      scores[i] = pts(state.predicciones[i], state.resultados[i], round);
+    });
+    state.history.push({
+      predicciones: {...state.predicciones},
+      resultados: {...state.resultados},
+      scores
+    });
+    state.predicciones = {};
+    state.resultados = {};
+    viewRoundIdx = null;
+    state.phase = 'summary';
+    saveState();
+    render();
+  });
+}
+
+function showConfirm(message, onConfirm){
+  const overlay = document.createElement('div');
+  overlay.id = 'confirmOverlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <div class="confirm-msg">${escapeHtml(message)}</div>
+      <div class="confirm-actions">
+        <button class="btn-ghost" id="confirmNo">Cancelar</button>
+        <button class="btn-primary" id="confirmYes">Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('confirmNo').addEventListener('click', ()=> overlay.remove());
+  document.getElementById('confirmYes').addEventListener('click', ()=>{ overlay.remove(); onConfirm(); });
+}
+
+function doReset(){
+  showConfirm('¿Empezar una partida nueva? Se perderá el marcador actual para todos.', ()=>{
+    state = emptyState();
+    viewRoundIdx = null;
+    saveState();
+    render();
+  });
+}
+
+function attachCommonHandlers(){
+  const rg = document.getElementById('resetGame');
+  if(rg) rg.addEventListener('click', doReset);
+  const vl = document.getElementById('viewLeaderboard');
+  if(vl) vl.addEventListener('click', ()=>{ showLeaderboard = true; render(); });
+  const sg = document.getElementById('saveGameBtn');
+  if(sg) sg.addEventListener('click', async ()=>{
+    const entry = buildGameEntry();
+    leaderboard.unshift(entry);
+    await saveLeaderboard();
+    sg.textContent = 'Partida guardada ✓';
+    sg.disabled = true;
+    sg.style.opacity = '.6';
+    sg.style.cursor = 'default';
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- persistence ----
+// ---- leaderboard (historial de partidas guardadas) ----
+const LEADERBOARD_KEY = 'predicciones-leaderboard-v1';
+let leaderboard = [];
+let showLeaderboard = false;
+
+async function loadLeaderboard(){
+  try{
+    const res = await dbStorage.get(LEADERBOARD_KEY);
+    if(res && res.value) leaderboard = JSON.parse(res.value);
+  }catch(e){}
+}
+async function saveLeaderboard(){
+  try{ await dbStorage.set(LEADERBOARD_KEY, JSON.stringify(leaderboard)); }catch(e){}
+}
+
+function buildGameEntry(){
+  const { winner, standings } = computeFinalStandings();
+  return {
+    id: Date.now(),
+    date: new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'}),
+    monto: state.monto || 0,
+    winner: winner ? winner.name : '',
+    standings
+  };
+}
+
+function buildBalanceHtml(){
+  const allNames = [];
+  leaderboard.forEach(g=> g.standings.forEach(p=>{ if(!allNames.includes(p.name)) allNames.push(p.name); }));
+  const gamesChrono = [...leaderboard].reverse(); // más antigua primero, para leer de izquierda a derecha
+
+  const netFor = (g, p)=> (p.name === g.winner)
+    ? g.standings.reduce((acc,s)=> s.name !== g.winner ? acc + s.owes : acc, 0)
+    : -p.owes;
+
+  const cellHtml = (net)=>{
+    if(net === null) return `<td style="color:var(--muted);">—</td>`;
+    if(net === 0) return `<td style="color:var(--muted);">${formatCLP(0)}</td>`;
+    const cls = net > 0 ? 'color:#8fd9ac;' : 'color:var(--coral);';
+    const sign = net > 0 ? '+' : '';
+    return `<td style="${cls}">${sign}${formatCLP(net)}</td>`;
+  };
+
+  const cumulativeCellHtml = (net)=>{
+    const cls = net > 0 ? 'color:#8fd9ac;' : net < 0 ? 'color:var(--coral);' : 'color:var(--muted);';
+    const sign = net > 0 ? '+' : '';
+    return `<td style="font-weight:700; ${cls}">${net === 0 ? formatCLP(0) : sign+formatCLP(net)}</td>`;
+  };
+
+  const header = `<tr><th>Jugador</th>${gamesChrono.map(g=>`<th>${escapeHtml(g.date)}</th>`).join('')}<th>Acumulado</th></tr>`;
+  const rows = allNames.map(name=>{
+    let cumulative = 0;
+    const cells = gamesChrono.map(g=>{
+      const p = g.standings.find(s=>s.name===name);
+      if(!p) return cellHtml(null);
+      const net = netFor(g,p);
+      cumulative += net;
+      return cellHtml(net);
+    }).join('');
+    return `<tr><td>${avatarHtml(name,18,true)}${escapeHtml(name)}</td>${cells}${cumulativeCellHtml(cumulative)}</tr>`;
+  }).join('');
+
+  return `
+    <div class="card scoreboard">
+      <h3 style="margin-bottom:10px;">Saldos por partida</h3>
+      <div style="overflow-x:auto;">
+        <table style="min-width:100%;">
+          ${header}
+          ${rows}
+        </table>
+      </div>
+    </div>`;
+}
+
+function renderLeaderboard(){
+  if(!leaderboard.length){
+    return `
+      <div class="card">
+        <div class="round-title"><h2>Historial de partidas</h2><button class="btn-ghost" id="closeLeaderboard">Volver</button></div>
+        <div class="empty-note">Todavía no hay partidas guardadas.</div>
+      </div>`;
+  }
+  const wins = {};
+  leaderboard.forEach(g=>{ wins[g.winner] = (wins[g.winner]||0) + 1; });
+  const winsRows = Object.entries(wins).sort((a,b)=>b[1]-a[1]).map(([name,count])=>`
+    <div class="score-row">
+      <div class="score-name">${avatarHtml(name,22,true)}${escapeHtml(name)}</div>
+      <div class="score-pts" style="font-size:16px;">${count} 🏆</div>
+    </div>`).join('');
+
+  const games = leaderboard.map(g=>{
+    const rows = g.standings.map(p=>`
+      <div class="score-row">
+        <div class="pos">${p.position}</div>
+        <div class="score-name">${avatarHtml(p.name,20,true)}${escapeHtml(p.name)} ${p.isQueso ? '<span class="queso">🧀</span>' : ''}</div>
+        <div class="score-pts" style="font-size:15px;">${p.total}</div>
+        <div class="score-diff">${p.owes ? formatCLP(p.owes) : ''}</div>
+      </div>`).join('');
+    return `
+      <div class="card scoreboard">
+        <div class="round-title">
+          <h3 style="font-size:16px;">🏆 ${escapeHtml(g.winner)} · ${escapeHtml(g.date)}</h3>
+          <button class="btn-danger delete-game" data-id="${g.id}" title="Eliminar partida" style="padding:4px 10px; font-size:12px;">✕</button>
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="round-title"><h2>Historial de partidas</h2><button class="btn-ghost" id="closeLeaderboard">Volver</button></div>
+    </div>
+    <div class="card scoreboard">
+      <h3 style="margin-bottom:10px;">Victorias por jugador</h3>
+      ${winsRows}
+    </div>
+    ${buildBalanceHtml()}
+    ${games}
+  `;
+}
+
+function attachLeaderboardHandlers(){
+  const closeBtn = document.getElementById('closeLeaderboard');
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{ showLeaderboard = false; render(); });
+  document.querySelectorAll('.delete-game').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = Number(e.currentTarget.dataset.id);
+      showConfirm('¿Eliminar esta partida del historial? Esto no se puede deshacer.', async ()=>{
+        leaderboard = leaderboard.filter(g=> g.id !== id);
+        await saveLeaderboard();
+        render();
+      });
+    });
+  });
+}
+
+const STORAGE_KEY = 'predicciones-game-v1';
+let saving = false;
+let suspendPoll = false; // true mientras se muestra la animación de inicio, para no pisar el estado nuevo
+
+async function saveState(silent){
+  if(!firebaseReady){
+    const tag = document.getElementById('syncTag');
+    if(tag) tag.textContent = 'guardado no disponible aquí';
+    return;
+  }
+  try{
+    saving = true;
+    const res = await dbStorage.set(STORAGE_KEY, JSON.stringify(state));
+    document.getElementById('syncTag') && (document.getElementById('syncTag').textContent = res ? 'sincronizado ✓' : 'error al guardar');
+  }catch(e){
+    const tag = document.getElementById('syncTag');
+    if(tag) tag.textContent = 'sin conexión';
+  }finally{
+    saving = false;
+  }
+}
+
+async function loadState(){
+  const tag = document.getElementById('syncTag');
+  if(!firebaseReady){
+    if(tag) tag.textContent = 'guardado no disponible aquí';
+    render();
+    return;
+  }
+  try{
+    const res = await dbStorage.get(STORAGE_KEY);
+    if(res && res.value){
+      state = JSON.parse(res.value);
+    }
+    if(tag) tag.textContent = 'sincronizado ✓';
+  }catch(e){
+    if(tag) tag.textContent = 'sin conexión';
+  }
+  render();
+}
+
+// poll for updates from other players every 5s, but don't stomp on active typing
+setInterval(async ()=>{
+  if(saving || suspendPoll) return;
+  const active = document.activeElement;
+  if(active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) return;
+  try{
+    const res = await dbStorage.get(STORAGE_KEY);
+    if(res && res.value){
+      const remote = JSON.parse(res.value);
+      if(JSON.stringify(remote) !== JSON.stringify(state)){
+        state = remote;
+        render();
+      }
+    }
+  }catch(e){}
+}, 5000);
+
+document.getElementById('topReset').addEventListener('click', doReset);
+
+loadLeaderboard();
+loadState();
+</script>
+</body>
+</html>
