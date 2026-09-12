@@ -461,6 +461,7 @@ function renderSetup(){
 }
 
 function playIntroAnimation(names, onComplete){
+  suspendPoll = true;
   const overlay = document.createElement('div');
   overlay.id = 'introOverlay';
 
@@ -480,7 +481,11 @@ function playIntroAnimation(names, onComplete){
 
   setTimeout(()=>{
     overlay.classList.add('intro-fadeout');
-    setTimeout(()=>{ overlay.remove(); onComplete(); }, 450);
+    setTimeout(()=>{
+      overlay.remove();
+      suspendPoll = false;
+      onComplete();
+    }, 450);
   }, 2100);
 }
 
@@ -1156,6 +1161,7 @@ function attachLeaderboardHandlers(){
 
 const STORAGE_KEY = 'predicciones-game-v1';
 let saving = false;
+let suspendPoll = false; // true mientras se muestra la animación de inicio, para no pisar el estado nuevo
 
 async function saveState(silent){
   if(!firebaseReady){
@@ -1196,7 +1202,7 @@ async function loadState(){
 
 // poll for updates from other players every 5s, but don't stomp on active typing
 setInterval(async ()=>{
-  if(saving) return;
+  if(saving || suspendPoll) return;
   const active = document.activeElement;
   if(active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) return;
   try{
